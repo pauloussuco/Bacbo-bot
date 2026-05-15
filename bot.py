@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BacBo Signal Bot - Bot de análise estatística para Bac Bo
+BacBo Signal Bot - Com notificações e análise automática
 """
 
 import logging
@@ -45,6 +45,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"Olá, *{user.first_name}*! 👋\n\n"
         f"Sou um bot de análise estatística para *Bac Bo*.\n\n"
+        f"✅ *Notificação automática ATIVA*\n"
+        f"Após cada resultado registado receves o sinal automaticamente!\n\n"
         f"⚠️ _Jogue com responsabilidade._\n\n"
         f"Escolha uma opção abaixo:"
     )
@@ -66,6 +68,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `P` — Player\n"
         "• `B` — Banker\n"
         "• `T` — Tie (Empate)\n\n"
+        "🔔 *Notificação automática:*\n"
+        "_Após cada resultado o bot envia o sinal automaticamente!_\n\n"
         "⚠️ _Nenhum sistema garante lucro em jogos de azar._"
     )
     if update.message:
@@ -87,9 +91,23 @@ async def resultado_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
         return
+
     resultado = context.args[0].upper()
     resposta = history_handler.register_result(resultado)
     await update.message.reply_text(resposta, parse_mode="Markdown")
+
+    # ── ANÁLISE E NOTIFICAÇÃO AUTOMÁTICA ──
+    stats = analyzer.get_full_stats()
+    if stats["total"] >= 5:
+        await update.message.reply_text("🔍 *Analisando próxima rodada...*", parse_mode="Markdown")
+        signal_data = signal_handler.generate_signal()
+        await update.message.reply_text(signal_data, parse_mode="Markdown")
+    else:
+        restantes = 5 - stats["total"]
+        await update.message.reply_text(
+            f"⏳ *Faltam {restantes} resultado(s)* para ativar a análise automática!",
+            parse_mode="Markdown"
+        )
 
 
 async def historico_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -149,14 +167,29 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("res_"):
         resultado = data.split("_")[1]
         resposta = history_handler.register_result(resultado)
+
         keyboard = [
-            [InlineKeyboardButton("🎯 Ver Sinal", callback_data="signal"),
-             InlineKeyboardButton("➕ Novo Resultado", callback_data="register")],
+            [InlineKeyboardButton("➕ Novo Resultado", callback_data="register")],
             [InlineKeyboardButton("🔙 Menu", callback_data="back_menu")],
         ]
         await query.edit_message_text(
             resposta, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
         )
+
+        # ── ANÁLISE E NOTIFICAÇÃO AUTOMÁTICA VIA BOTÃO ──
+        stats = analyzer.get_full_stats()
+        if stats["total"] >= 5:
+            signal_data = signal_handler.generate_signal()
+            await query.message.reply_text(
+                "🔔 *Sinal Automático:*\n" + signal_data,
+                parse_mode="Markdown"
+            )
+        else:
+            restantes = 5 - stats["total"]
+            await query.message.reply_text(
+                f"⏳ *Faltam {restantes} resultado(s)* para ativar a análise automática!",
+                parse_mode="Markdown"
+            )
 
     elif data == "reset":
         keyboard = [
