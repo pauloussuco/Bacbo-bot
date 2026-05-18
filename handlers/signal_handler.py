@@ -1,5 +1,5 @@
 """
-Signal Handler - Estilo AYO BOT VIP
+Signal Handler - Estilo AYO BOT VIP - Versão corrigida
 """
 
 from datetime import datetime
@@ -20,14 +20,14 @@ class SignalHandler:
         self.streak = 0
 
     def register_outcome(self, resultado: str):
-        """Verifica se o último sinal acertou."""
         if self.last_signal is None:
-            return
-
-        if self.last_signal == resultado or (self.last_signal != "T" and resultado == "T"):
+            return None
+        if self.last_signal == resultado:
             self.greens += 1
             self.streak += 1
             return "green"
+        elif resultado == "T":
+            return "tie"
         else:
             self.reds += 1
             self.streak = 0
@@ -51,29 +51,15 @@ class SignalHandler:
                 f"━━━━━━━━━━━━━━━━━━━━\n"
                 f"🎲 *Bac Bo Ao Vivo* 🇧🇷\n\n"
                 f"Faltam *{restantes}* resultado(s) para o primeiro sinal!\n\n"
-                f"📊 Rodadas registadas: *{stats['total']}/5*"
+                f"📊 Rodadas: *{stats['total']}/5*"
             )
 
         sug = data["suggestion"]
         conf = data["confidence"]
         stats = data["stats"]
         freq = stats["frequency"]
-        sk = stats["streak_result"]
-        sl = stats["streak_length"]
 
-        # Streak texto
-        streak_txt = ""
-        if self.streak >= 2:
-            streak_txt = f"\n💰 *Estamos com {self.streak} greens seguidos!*\n"
-
-        # Placard
-        acc = self.accuracy()
-        placard = (
-            f"📊 Placard do dia  🟢 *{self.greens}*  🔴 *{self.reds}*\n"
-            f"🎯 Acertamos: *{acc}%* das vezes"
-        ) if (self.greens + self.reds) > 0 else ""
-
-        # Confiança
+        # Barra de confiança
         if conf >= CONFIDENCE_HIGH:
             conf_bar = "🟢🟢🟢🟢🟢"
         elif conf >= CONFIDENCE_MEDIUM:
@@ -84,6 +70,27 @@ class SignalHandler:
         # Histórico visual
         last5 = stats.get("last_5", [])
         visual = "  ".join(self.EMOJI.get(r, "⚫") for r in last5)
+
+        # Streak info
+        streak_sig = stats.get("streak_result")
+        streak_len = stats.get("streak_length", 0)
+        streak_txt = ""
+        if streak_sig and streak_len >= 2:
+            streak_txt = f"🔥 Streak: {self.EMOJI.get(streak_sig,'')} *{streak_len}x* seguidos\n"
+
+        # Placard
+        acc = self.accuracy()
+        placard = ""
+        if (self.greens + self.reds) > 0:
+            placard = (
+                f"\n📊 Placard do dia  🟢 *{self.greens}*  🔴 *{self.reds}*\n"
+                f"🎯 Acertamos: *{acc}%* das vezes"
+            )
+
+        # Greens seguidos
+        greens_txt = ""
+        if self.streak >= 2:
+            greens_txt = f"\n💰 *Estamos com {self.streak} greens seguidos!*"
 
         text = (
             f"🚀 *APOSTE NA COR* {self.EMOJI[sug]}\n"
@@ -96,32 +103,24 @@ class SignalHandler:
             f"🔵 Player: `{freq.get('P', 0):.1f}%`\n"
             f"🔴 Banker: `{freq.get('B', 0):.1f}%`\n"
             f"🟠 Tie:    `{freq.get('T', 0):.1f}%`\n\n"
-            f"⏪ Últimas 5: {visual}\n\n"
+            f"{streak_txt}"
+            f"⏪ Últimas 5: {visual}"
+            f"{greens_txt}"
+            f"{placard}\n\n"
+            f"⚠️ _Use com responsabilidade._"
         )
 
-        if streak_txt:
-            text += streak_txt + "\n"
-
-        if placard:
-            text += placard + "\n"
-
-        text += f"\n⚠️ _Use com responsabilidade._"
-
-        # Guarda último sinal
         self.last_signal = sug
-
         return text
 
     def get_resultado_feedback(self, resultado: str) -> str:
-        """Retorna feedback após registar resultado."""
         outcome = self.register_outcome(resultado)
-
         emoji_r = self.EMOJI.get(resultado, "⚫")
         label_r = self.LABEL.get(resultado, resultado)
 
         if outcome == "green":
             return (
-                f"✅ *+DINHEIRO NA CONTA* 🤑\n"
+                f"✅ *GREEN* 🟢\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
                 f"Resultado: {emoji_r} *{label_r}*\n\n"
                 f"💰 *{self.streak} green(s) seguidos!*\n"
@@ -130,11 +129,19 @@ class SignalHandler:
             )
         elif outcome == "red":
             return (
-                f"❌ *Resultado diferente*\n"
+                f"❌ *RED* 🔴\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
                 f"Resultado: {emoji_r} *{label_r}*\n\n"
                 f"🟢 Greens: *{self.greens}*  🔴 Reds: *{self.reds}*\n"
                 f"🎯 Acerto: *{self.accuracy()}%*"
+            )
+        elif outcome == "tie":
+            return (
+                f"🟠 *EMPATE — Protegido!*\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"Resultado: {emoji_r} *{label_r}*\n\n"
+                f"🛡️ Aposta protegida no empate!\n"
+                f"🟢 Greens: *{self.greens}*  🔴 Reds: *{self.reds}*"
             )
         else:
             return (
