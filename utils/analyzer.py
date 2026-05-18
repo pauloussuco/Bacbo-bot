@@ -1,6 +1,5 @@
 """
-Analisador estatístico para Bac Bo.
-Implementa múltiplos algoritmos de leitura de padrões.
+Analisador estatístico para Bac Bo - Versão corrigida e equilibrada
 """
 
 from collections import Counter, deque
@@ -10,7 +9,7 @@ from config.settings import MAX_HISTORY, MIN_HISTORY_SIGNAL
 class BacBoAnalyzer:
 
     VALID_RESULTS = {"P", "B", "T"}
-    LABELS = {"P": "👤 Player", "B": "🏦 Banker", "T": "🤝 Tie"}
+    LABELS = {"P": "🔵 Player", "B": "🔴 Banker", "T": "🟠 Tie"}
 
     def __init__(self):
         self.history: deque = deque(maxlen=MAX_HISTORY)
@@ -44,43 +43,68 @@ class BacBoAnalyzer:
                 "stats": self._base_stats(h),
             }
 
-        scores = {}
+        scores = {"P": 0.0, "B": 0.0, "T": 0.0}
 
-        freq = self._frequency(h)
-        for k, v in freq.items():
-            scores[k] = scores.get(k, 0) + v * 1.0
+        # Indicador 1 — Frequência últimas 20
+        last20 = h[-20:] if len(h) >= 20 else h
+        freq20 = self._frequency(last20)
+        for k in ("P", "B", "T"):
+            scores[k] += freq20.get(k, 0) * 1.0
 
-        recent = h[-10:]
-        recent_freq = self._frequency(recent)
-        for k, v in recent_freq.items():
-            scores[k] = scores.get(k, 0) + v * 1.5
+        # Indicador 2 — Tendência recente últimas 8 (peso 2x)
+        recent = h[-8:]
+        freq_recent = self._frequency(recent)
+        for k in ("P", "B", "T"):
+            scores[k] += freq_recent.get(k, 0) * 2.0
 
-        alt = self._alternation_signal(h)
-        if alt:
-            scores[alt] = scores.get(alt, 0) + 20
-
+        # Indicador 3 — Streak ativo
         streak_sig, streak_len = self._streak_signal(h)
         if streak_sig:
-            if streak_len >= 4:
-                opposite = "B" if streak_sig == "P" else "P"
-                scores[opposite] = scores.get(opposite, 0) + streak_len * 3
-            else:
-                scores[streak_sig] = scores.get(streak_sig, 0) + streak_len * 2
+            if streak_len >= 3:
+                for k in ("P", "B"):
+                    if k != streak_sig:
+                        scores[k] += streak_len * 5
+            elif streak_len >= 2:
+                scores[streak_sig] += streak_len * 2
 
+        # Indicador 4 — Alternância
+        alt = self._alternation_signal(h)
+        if alt:
+            scores[alt] += 25
+
+        # Indicador 5 — Zigzag
         zigzag = self._zigzag_signal(h)
         if zigzag:
-            scores[zigzag] = scores.get(zigzag, 0) + 15
+            scores[zigzag] += 20
+
+        # Indicador 6 — Desequilíbrio histórico
+        freq_all = self._frequency(h)
+        p_pct = freq_all.get("P", 0)
+        b_pct = freq_all.get("B", 0)
+        if p_pct > 60:
+            scores["B"] += 20
+        elif b_pct > 60:
+            scores["P"] += 20
+
+        # Escolhe entre P e B apenas (T só se muito dominante)
+        pb_scores = {"P": scores["P"], "B": scores["B"]}
+        t_score = scores["T"]
+
+        if t_score > max(pb_scores.values()) * 1.8:
+            suggestion = "T"
+        else:
+            suggestion = max(pb_scores, key=lambda k: pb_scores[k])
 
         total_score = sum(scores.values()) or 1
-        suggestion = max(scores, key=lambda k: scores.get(k, 0))
-        confidence = round((scores.get(suggestion, 0) / total_score) * 100)
+        confidence = round((scores[suggestion] / total_score) * 100)
+        confidence = max(50, min(confidence, 88))
 
         trend = self._trend(h)
-        reason = self._build_reason(h, suggestion, streak_sig, streak_len, zigzag, alt, recent_freq)
+        reason = self._build_reason(h, suggestion, streak_sig, streak_len, zigzag, alt, freq_recent)
 
         return {
             "suggestion": suggestion,
-            "confidence": min(confidence, 92),
+            "confidence": confidence,
             "reason": reason,
             "trend": trend,
             "stats": self._base_stats(h),
@@ -88,7 +112,7 @@ class BacBoAnalyzer:
 
     def _frequency(self, history: list) -> dict:
         if not history:
-            return {}
+            return {"P": 0, "B": 0, "T": 0}
         c = Counter(history)
         total = len(history)
         return {k: round(c.get(k, 0) / total * 100, 1) for k in self.VALID_RESULTS}
@@ -108,8 +132,7 @@ class BacBoAnalyzer:
     def _alternation_signal(self, history: list):
         if len(history) < 6:
             return None
-        seg = history[-6:]
-        pb_only = [r for r in seg if r in ("P", "B")]
+        pb_only = [r for r in history[-6:] if r in ("P", "B")]
         if len(pb_only) < 4:
             return None
         alternating = all(pb_only[i] != pb_only[i + 1] for i in range(len(pb_only) - 1))
@@ -146,26 +169,20 @@ class BacBoAnalyzer:
 
     def _build_reason(self, h, suggestion, streak_sig, streak_len, zigzag, alt, recent_freq) -> str:
         reasons = []
-
-        if streak_sig and streak_len >= 4 and suggestion != streak_sig:
-            reasons.append(f"Streak de {streak_len}x {self.LABELS[streak_sig]} — alta probabilidade de quebra")
+        if streak_sig and streak_len >= 3 and suggestion != streak_sig:
+            reasons.append(f"Streak de {streak_len}x {self.LABELS[streak_sig]} — quebra provável")
         elif streak_sig and streak_len >= 2 and suggestion == streak_sig:
             reasons.append(f"Sequência ativa de {streak_len}x {self.LABELS[streak_sig]}")
-
         if alt and suggestion == alt:
-            reasons.append("Padrão de alternância P↔B detectado")
-
+            reasons.append("Padrão alternância detectado")
         if zigzag and suggestion == zigzag:
-            reasons.append("Padrão dois-a-dois (zigzag) identificado")
-
+            reasons.append("Padrão zigzag identificado")
         dominant = max(recent_freq, key=lambda k: recent_freq.get(k, 0)) if recent_freq else None
         if dominant and dominant == suggestion:
-            reasons.append(f"{self.LABELS[dominant]} dominando as últimas 10 rodadas ({recent_freq.get(dominant, 0):.0f}%)")
-
+            reasons.append(f"{self.LABELS[dominant]} dominando ({recent_freq.get(dominant, 0):.0f}%)")
         if not reasons:
             freq = self._frequency(h)
-            reasons.append(f"Frequência histórica favorece {self.LABELS[suggestion]} ({freq.get(suggestion, 0):.1f}%)")
-
+            reasons.append(f"Frequência favorece {self.LABELS[suggestion]} ({freq.get(suggestion, 0):.1f}%)")
         return " • ".join(reasons)
 
     def _base_stats(self, history: list) -> dict:
