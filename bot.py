@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 BacBo Signal Bot - Estilo AYO BOT VIP - Versão final corrigida
-Bac Bo Ao Vivo 🇧🇷 Elephantbet
+Bac Bo Ao Vivo Elephantbet
 """
 
 import logging
