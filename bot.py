@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BacBo Signal Bot - Estilo AYO BOT VIP
+BacBo Signal Bot - Estilo AYO BOT VIP - Versão final corrigida
 Bac Bo Ao Vivo 🇧🇷 Elephantbet
 """
 
@@ -78,7 +78,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 🔴 `B` — Banker (Bancário)\n"
         "• 🟠 `T` — Tie (Empate)\n\n"
         "🔔 *Após cada resultado o sinal é enviado automaticamente!*\n\n"
-        "📊 *O bot regista greens e reds automaticamente!*\n\n"
+        "🟠 *Empate = aposta protegida automaticamente!*\n\n"
         "⚠️ _Nenhum sistema garante lucro em jogos de azar._"
     )
     if update.message:
@@ -108,12 +108,9 @@ async def resultado_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     resposta = history_handler.register_result(resultado)
     await update.message.reply_text(resposta, parse_mode="Markdown")
 
-    # ── ANÁLISE AUTOMÁTICA ──
+    # ── SINAL AUTOMÁTICO ──
     stats = analyzer.get_full_stats()
     if stats["total"] >= 5:
-        await update.message.reply_text(
-            "🔍 *Analisando próxima rodada...*", parse_mode="Markdown"
-        )
         signal_data = signal_handler.generate_signal()
         await update.message.reply_text(signal_data, parse_mode="Markdown")
     else:
@@ -192,7 +189,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             resposta, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
         )
 
-        # ── NOTIFICAÇÃO AUTOMÁTICA ──
+        # ── SINAL AUTOMÁTICO ──
         stats = analyzer.get_full_stats()
         if stats["total"] >= 5:
             signal_data = signal_handler.generate_signal()
@@ -242,7 +239,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await query.edit_message_text(
             f"🎲 *Bac Bo Ao Vivo* 🇧🇷\n"
-            f"━━━━━━━━━━━━━━━━\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
             f"🔵 Player  •  🔴 Banker  •  🟠 Tie\n\n"
             f"📊 Placard: 🟢 *{g}*  🔴 *{r}*  🎯 *{acc}%*\n\n"
             f"Escolha uma opção:",
@@ -259,7 +256,7 @@ def main():
         logger.error("❌ Configure o BOT_TOKEN!")
         return
 
-    logger.info("🚀 Iniciando BacBo Signal Bot — Bac Bo 🇧🇷 Elephantbet...")
+    logger.info("🚀 Iniciando USSUCO VOLVO BOT — Bac Bo 🇧🇷 Elephantbet...")
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start",     start))
